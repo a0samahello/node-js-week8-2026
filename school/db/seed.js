@@ -10,6 +10,10 @@ const { dataSource } = require('./data-source')
 async function clearAll() {
   const ORDER = [
     // TODO: 按「你的」FK 依賴順序填 entity name（先刪 Grade，再 Student，最後 Class / Subject）
+    'Grade',   // Grade 有 student_id 與 subject_id，最先刪除
+    'Student', // Student 有 class_id，接著刪除
+    'Class',   // Class 被 Student 參照，此時可以安全刪除
+    'Subject'  // Subject 被 Grade 參照，此時可以安全刪除
   ]
   for (const name of ORDER) {
     if (dataSource.hasMetadata(name)) {
@@ -31,6 +35,42 @@ async function main() {
   //      studentRepo.save({ name: '...', class: 班級物件 })
   //      gradeRepo.save({ score: 95, student: 學生物件, subject: 科目物件 })
   // ================================================================================
+
+  const classRepo = dataSource.getRepository('Class');
+// 1. CLASS：至少 2 個班級
+  const [classA, classB] = await classRepo.save([
+    { name: '一年一班' },
+    { name: '一年二班' },
+  ]);
+
+
+  const subjectRepo = dataSource.getRepository('Subject');
+  // 2. SUBJECT：至少 2 個科目
+  const [Korean, english] = await subjectRepo.save([
+    { name: '韓文' },
+    { name: '英文' },
+  ]);
+
+
+  const studentRepo = dataSource.getRepository('Student');
+  // 3. STUDENT：新增學生，並對應到班級
+  const [student1, student2, student3] = await studentRepo.save([
+    { name: '呂尚', class: classA },
+    { name: '友榮', class: classA },
+    { name: '傘', class: classB },
+  ]);
+
+
+  const gradeRepo = dataSource.getRepository('Grade');
+  // 4. GRADE：新增成績（能 JOIN 回學生與科目）
+  await gradeRepo.save([
+    { score: 90, student: student1, subject: Korean },
+    { score: 60, student: student1, subject: english },
+    { score: 80, student: student2, subject: Korean },
+    { score: 70, student: student2, subject: english },
+    { score: 90, student: student3, subject: Korean },
+    { score: 100, student: student3, subject: english },
+  ]);
 
   console.log('🌱 seed 完成')
   await dataSource.destroy()
